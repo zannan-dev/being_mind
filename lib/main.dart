@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:being_mind/screens/home_screen.dart';
+import 'package:being_mind/routes/app_router.dart';
 
 void main() {
   runApp(const BoxBreathingApp());
@@ -17,8 +17,10 @@ class BoxBreathingApp extends StatelessWidget {
         fontFamily: 'Inter',
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFA084E8)),
         useMaterial3: true,
+        platform: TargetPlatform.iOS,
       ),
-      home: const HomeScreen(),
+      initialRoute: AppRouter.home,
+      onGenerateRoute: AppRouter.generateRoute,
     );
   }
 }
