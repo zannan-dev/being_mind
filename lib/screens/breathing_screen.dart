@@ -98,7 +98,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.arrow_back_ios_new,
@@ -140,7 +140,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                       Text(
                         "4 seconds",
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.7), fontSize: 12),
+                            color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
                       ),
                       const SizedBox(height: 16),
                       SizedBox(
@@ -155,9 +155,9 @@ class _BreathingScreenState extends State<BreathingScreen>
                               height: 280,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.15),
+                                color: Colors.white.withValues(alpha: 0.15),
                                 border: Border.all(
-                                    color: Colors.white.withOpacity(0.3), width: 1),
+                                    color: Colors.white.withValues(alpha: 0.3), width: 1),
                               ),
                             ),
                             // Pulsating core
@@ -170,14 +170,14 @@ class _BreathingScreenState extends State<BreathingScreen>
                                   shape: BoxShape.circle,
                                   gradient: RadialGradient(
                                     colors: [
-                                      Colors.white.withOpacity(0.8),
-                                      Colors.white.withOpacity(0.2),
+                                      Colors.white.withValues(alpha: 0.8),
+                                      Colors.white.withValues(alpha: 0.2),
                                     ],
                                     stops: const [0.2, 1.0],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.white.withOpacity(0.4),
+                                      color: Colors.white.withValues(alpha: 0.4),
                                       blurRadius: 30,
                                       spreadRadius: 10,
                                     )
@@ -234,11 +234,11 @@ class _BreathingScreenState extends State<BreathingScreen>
                         height: 70,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.3),
-                          border: Border.all(color: Colors.white.withOpacity(0.5), width: 1),
+                          color: Colors.white.withValues(alpha: 0.3),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF8C64F5).withOpacity(0.4),
+                              color: const Color(0xFF8C64F5).withValues(alpha: 0.4),
                               blurRadius: 20,
                               spreadRadius: 5,
                             )

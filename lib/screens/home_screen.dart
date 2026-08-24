@@ -23,58 +23,13 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const CircleAvatar(
-                          backgroundColor: Colors.white24,
-                          radius: 20,
-                          child: Icon(Icons.person, color: Colors.white, size: 24),
-                        ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Hello,",
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: 14),
-                            ),
-                            const Text(
-                              "Kristina!",
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        )
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.notifications_none,
-                          color: Colors.white, size: 24),
-                    )
-                  ],
-                ),
-              ),
+
 
               // Title
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+                padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 40.0, bottom: 24.0),
                 child: Text(
-                  "My plans",
+                  "Exercises",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 40,
@@ -85,59 +40,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
 
-              // Filters (Mockup)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            "October",
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(Icons.calendar_today, color: Colors.white, size: 16),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            "All meditation",
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Text(
-                              "12",
-                              style: TextStyle(color: Color(0xFF8C64F5), fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+
 
               // List of exercises
               Expanded(
@@ -169,41 +72,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               
-              // Bottom Nav (Mockup)
-              Container(
-                height: 80,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      const Color(0xFFC7B1F6).withOpacity(0.8),
-                      const Color(0xFFE4D5FB).withOpacity(0.0),
-                    ],
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Icon(Icons.home, color: Colors.white, size: 28),
-                    Icon(Icons.access_time_filled, color: Colors.white.withOpacity(0.5), size: 28),
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.3),
-                        border: Border.all(color: Colors.white.withOpacity(0.5), width: 1),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.spa, color: Colors.white, size: 24),
-                      ),
-                    ),
-                    Icon(Icons.bookmark, color: Colors.white.withOpacity(0.5), size: 28),
-                    Icon(Icons.grid_view_rounded, color: Colors.white.withOpacity(0.5), size: 28),
-                  ],
-                ),
-              ),
+
             ],
           ),
         ),
@@ -233,7 +102,7 @@ class HomeScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 5),
             )
@@ -309,7 +178,7 @@ class HomeScreen extends StatelessWidget {
                         height: 100,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                         ),
                       ),
                     ),
