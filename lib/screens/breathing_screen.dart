@@ -612,8 +612,8 @@ class BackgroundWavesPainter extends CustomPainter {
         ..strokeWidth = 1.2
         ..color =
             Color.lerp(
-              const Color(0xFF38BDF8),
-              const Color(0xFFC084FC),
+              const Color(0xFF06B6D4),
+              const Color(0xFFA855F7),
               lineProgress,
             )!.withValues(
               alpha: baseAlpha * (1.0 - (lineProgress - 0.5).abs() * 0.8),
@@ -651,8 +651,8 @@ class BackgroundWavesPainter extends CustomPainter {
         ..strokeWidth = 1.2
         ..color =
             Color.lerp(
-              const Color(0xFFC084FC),
-              const Color(0xFF38BDF8),
+              const Color(0xFFA855F7),
+              const Color(0xFFFB7185),
               lineProgress,
             )!.withValues(
               alpha: baseAlpha * (1.0 - (lineProgress - 0.5).abs() * 0.8),
@@ -722,17 +722,20 @@ class IridescentBubblePainter extends CustomPainter {
     final bounds = Rect.fromCircle(center: center, radius: baseRadius + 20);
 
     // -------------------------------------------------------------
-    // PASS 1: Volumetric Ambient Aura (Soft glow surrounding the bubble)
+    // -------------------------------------------------------------
+    // PASS 1: Volumetric Ambient Aura (Matching the icon's triad aura)
     // -------------------------------------------------------------
     final auraPaint = Paint()
-      ..shader = RadialGradient(
+      ..shader = SweepGradient(
+        center: Alignment.center,
         colors: [
-          const Color(0xFF6366F1).withValues(alpha: 0.28),
-          const Color(0xFF8B5CF6).withValues(alpha: 0.16),
-          const Color(0xFF0EA5E9).withValues(alpha: 0.08),
-          Colors.transparent,
+          const Color(0xFF06B6D4).withValues(alpha: 0.22), // Cyan (left)
+          const Color(0xFFA855F7).withValues(alpha: 0.28), // Violet (top)
+          const Color(0xFFFB7185).withValues(alpha: 0.24), // Coral rose (right)
+          const Color(0xFFFDBA74).withValues(alpha: 0.16), // Warm peach (bottom)
+          const Color(0xFF06B6D4).withValues(alpha: 0.22),
         ],
-        stops: const [0.6, 0.78, 0.92, 1.0],
+        stops: const [0.0, 0.30, 0.62, 0.84, 1.0],
       ).createShader(Rect.fromCircle(center: center, radius: baseRadius * 1.35))
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 28);
     canvas.drawCircle(center, baseRadius * 1.25, auraPaint);
@@ -758,123 +761,162 @@ class IridescentBubblePainter extends CustomPainter {
     canvas.drawPath(outerPath, glassBodyPaint);
 
     // -------------------------------------------------------------
-    // PASS 3: Iridescent Internal Color Sheen & Light Caustics
+    // PASS 3: The Three Chromatic Spheres (Matching the App Icon Triad)
     // -------------------------------------------------------------
-    // Soft diagonal chromatic dispersion (Lavender -> Cyan -> Peach -> Violet)
-    final iridescencePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          const Color(
-            0xFFDDD6FE,
-          ).withValues(alpha: 0.22), // Top-left soft lavender
-          const Color(0xFF38BDF8).withValues(alpha: 0.25), // Mid-left cyan
-          Colors.transparent,
-          const Color(
-            0xFFF472B6,
-          ).withValues(alpha: 0.22), // Bottom-right soft rose
-          const Color(0xFFC084FC).withValues(alpha: 0.28), // Violet
-        ],
-        stops: const [0.0, 0.28, 0.55, 0.82, 1.0],
-      ).createShader(bounds)
-      ..blendMode = BlendMode.screen;
-    canvas.drawPath(outerPath, iridescencePaint);
+    final circleRadius = baseRadius * 0.52;
 
-    // Electric cyan/blue core reflection on mid-left
-    final blueCausticPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.65, 0.15),
-        radius: 0.6,
-        colors: [
-          const Color(0xFF38BDF8).withValues(alpha: 0.38),
-          const Color(0xFF60A5FA).withValues(alpha: 0.18),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.5, 1.0],
-      ).createShader(bounds)
-      ..blendMode = BlendMode.plus;
-    // Continuous drifting caustics for dynamic internal light play
-    final driftX = 6.0 * cos(fluidPhase * 2 * pi);
-    final driftY = 5.0 * sin(fluidPhase * 2 * pi);
+    // Subtle ambient orbital drift
+    final driftXTop = 4.0 * sin(fluidPhase * 2 * pi);
+    final driftYTop = 4.0 * cos(fluidPhase * 2 * pi);
+    final driftXLeft = 4.0 * cos(fluidPhase * 2 * pi + 2 * pi / 3);
+    final driftYLeft = 4.0 * sin(fluidPhase * 2 * pi + 2 * pi / 3);
+    final driftXRight = 4.0 * cos(fluidPhase * 2 * pi + 4 * pi / 3);
+    final driftYRight = 4.0 * sin(fluidPhase * 2 * pi + 4 * pi / 3);
 
-    canvas.drawCircle(
-      Offset(
-        center.dx - baseRadius * 0.45 + driftX,
-        center.dy + baseRadius * 0.1 + driftY,
-      ),
-      baseRadius * 0.48,
-      blueCausticPaint,
+    // --- CIRCLE 1: TOP (Radiant Amethyst-Violet Sphere) ---
+    final topCenter = Offset(
+      center.dx + driftXTop,
+      center.dy - baseRadius * 0.28 + driftYTop,
     );
-
-    // Circle 2: Warm peach/magenta internal glow on lower edge
-    final peachCausticPaint = Paint()
+    final topBodyPaint = Paint()
       ..shader = RadialGradient(
-        center: const Alignment(0.3, 0.75),
-        radius: 0.55,
+        center: const Alignment(-0.10, -0.20),
+        radius: 0.85,
         colors: [
-          const Color(0xFFF472B6).withValues(alpha: 0.32),
-          const Color(0xFFFFB7B2).withValues(alpha: 0.18),
+          const Color(0xFFE879F9).withValues(alpha: 0.44), // Luminous lilac core
+          const Color(0xFFA855F7).withValues(alpha: 0.36), // Electric violet
+          const Color(0xFF7C3AED).withValues(alpha: 0.18), // Deep purple
           Colors.transparent,
         ],
-        stops: const [0.0, 0.45, 1.0],
-      ).createShader(bounds)
+        stops: const [0.0, 0.45, 0.80, 1.0],
+      ).createShader(Rect.fromCircle(center: topCenter, radius: circleRadius))
       ..blendMode = BlendMode.plus;
-    canvas.drawCircle(
-      Offset(
-        center.dx + baseRadius * 0.2 - driftX * 0.7,
-        center.dy + baseRadius * 0.5 - driftY * 0.7,
-      ),
-      baseRadius * 0.45,
-      peachCausticPaint,
-    );
+    canvas.drawCircle(topCenter, circleRadius, topBodyPaint);
 
-    // Circle 3: Glowing amethyst / orchid internal circle on upper-right
-    final violetCausticPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.45, -0.45),
-        radius: 0.58,
+    final topRimGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2
+      ..color = const Color(0xFFC084FC).withValues(alpha: 0.70)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
+    canvas.drawCircle(topCenter, circleRadius * 0.98, topRimGlow);
+
+    final topCrispRim = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3
+      ..shader = SweepGradient(
+        center: Alignment.center,
         colors: [
-          const Color(0xFFA855F7).withValues(alpha: 0.36),
-          const Color(0xFFC084FC).withValues(alpha: 0.18),
+          Colors.white.withValues(alpha: 0.80),
+          const Color(0xFFF5D0FE).withValues(alpha: 0.65),
+          const Color(0xFFA855F7).withValues(alpha: 0.20),
+          Colors.white.withValues(alpha: 0.80),
+        ],
+      ).createShader(Rect.fromCircle(center: topCenter, radius: circleRadius));
+    canvas.drawCircle(topCenter, circleRadius, topCrispRim);
+
+    // --- CIRCLE 2: BOTTOM-LEFT (Electric Cyan-Blue Sphere) ---
+    final leftCenter = Offset(
+      center.dx - baseRadius * 0.26 + driftXLeft,
+      center.dy + baseRadius * 0.20 + driftYLeft,
+    );
+    final leftBodyPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.20, -0.15),
+        radius: 0.85,
+        colors: [
+          const Color(0xFF67E8F9).withValues(alpha: 0.46), // Brilliant aqua core
+          const Color(0xFF06B6D4).withValues(alpha: 0.36), // Electric cyan
+          const Color(0xFF0284C7).withValues(alpha: 0.18), // Deep sky-blue
           Colors.transparent,
         ],
-        stops: const [0.0, 0.48, 1.0],
-      ).createShader(bounds)
+        stops: const [0.0, 0.45, 0.80, 1.0],
+      ).createShader(Rect.fromCircle(center: leftCenter, radius: circleRadius))
       ..blendMode = BlendMode.plus;
-    final driftX3 = 5.0 * sin(fluidPhase * 2 * pi + pi / 3);
-    final driftY3 = -6.0 * cos(fluidPhase * 2 * pi + pi / 3);
-    canvas.drawCircle(
-      Offset(
-        center.dx + baseRadius * 0.32 + driftX3,
-        center.dy - baseRadius * 0.38 + driftY3,
-      ),
-      baseRadius * 0.44,
-      violetCausticPaint,
+    canvas.drawCircle(leftCenter, circleRadius, leftBodyPaint);
+
+    final leftRimGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2
+      ..color = const Color(0xFF38BDF8).withValues(alpha: 0.75)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
+    canvas.drawCircle(leftCenter, circleRadius * 0.98, leftRimGlow);
+
+    final leftCrispRim = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3
+      ..shader = SweepGradient(
+        center: Alignment.center,
+        colors: [
+          Colors.white.withValues(alpha: 0.80),
+          const Color(0xFFBAE6FD).withValues(alpha: 0.65),
+          const Color(0xFF0284C7).withValues(alpha: 0.20),
+          Colors.white.withValues(alpha: 0.80),
+        ],
+      ).createShader(Rect.fromCircle(center: leftCenter, radius: circleRadius));
+    canvas.drawCircle(leftCenter, circleRadius, leftCrispRim);
+
+    // --- CIRCLE 3: BOTTOM-RIGHT (Warm Peach-Rose / Sunset Coral Sphere) ---
+    final rightCenter = Offset(
+      center.dx + baseRadius * 0.26 + driftXRight,
+      center.dy + baseRadius * 0.20 + driftYRight,
     );
+    final rightBodyPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(0.18, -0.15),
+        radius: 0.85,
+        colors: [
+          const Color(0xFFFDA4AF).withValues(alpha: 0.46), // Peach-rose core
+          const Color(0xFFFB7185).withValues(alpha: 0.36), // Coral rose
+          const Color(0xFFF43F5E).withValues(alpha: 0.18), // Sunset crimson
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.45, 0.80, 1.0],
+      ).createShader(Rect.fromCircle(center: rightCenter, radius: circleRadius))
+      ..blendMode = BlendMode.plus;
+    canvas.drawCircle(rightCenter, circleRadius, rightBodyPaint);
+
+    final rightRimGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2
+      ..color = const Color(0xFFFDBA74).withValues(alpha: 0.75)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
+    canvas.drawCircle(rightCenter, circleRadius * 0.98, rightRimGlow);
+
+    final rightCrispRim = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3
+      ..shader = SweepGradient(
+        center: Alignment.center,
+        colors: [
+          Colors.white.withValues(alpha: 0.80),
+          const Color(0xFFFED7AA).withValues(alpha: 0.65),
+          const Color(0xFFFB7185).withValues(alpha: 0.20),
+          Colors.white.withValues(alpha: 0.80),
+        ],
+      ).createShader(Rect.fromCircle(center: rightCenter, radius: circleRadius));
+    canvas.drawCircle(rightCenter, circleRadius, rightCrispRim);
 
     canvas.restore(); // Restore clip
 
     // -------------------------------------------------------------
-    // PASS 4: Radiant Fresnel Rim Lighting (Multi-color Soap Film Edge)
+    // PASS 4: Radiant Fresnel Rim Lighting (Matching App Icon Edge)
     // -------------------------------------------------------------
-    // A) Soft blurred rim glow
+    // A) Soft blurred rim glow matching the triad hues
     final rimGlowPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 10.0
+      ..strokeWidth = 9.0
       ..shader = SweepGradient(
         center: Alignment.center,
         colors: [
-          const Color(0xFF38BDF8).withValues(alpha: 0.7), // Cyan/Blue
-          const Color(0xFFA855F7).withValues(alpha: 0.85), // Violet
-          const Color(0xFFEC4899).withValues(alpha: 0.75), // Magenta
-          const Color(0xFFFDE047).withValues(alpha: 0.45), // Subtle gold
-          const Color(0xFF60A5FA).withValues(alpha: 0.8), // Bright Blue
-          const Color(0xFF38BDF8).withValues(alpha: 0.7),
+          const Color(0xFF38BDF8).withValues(alpha: 0.70), // Cyan (left)
+          const Color(0xFFA855F7).withValues(alpha: 0.85), // Violet (top)
+          const Color(0xFFFB7185).withValues(alpha: 0.75), // Coral Rose (right)
+          const Color(0xFFFDBA74).withValues(alpha: 0.50), // Peach Gold (bottom)
+          const Color(0xFF38BDF8).withValues(alpha: 0.70),
         ],
-        stops: const [0.0, 0.28, 0.58, 0.78, 0.92, 1.0],
+        stops: const [0.0, 0.28, 0.60, 0.82, 1.0],
       ).createShader(bounds)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7.0);
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0);
     canvas.drawPath(outerPath, rimGlowPaint);
 
     // B) Sharp, brilliant crisp rim line
@@ -1051,9 +1093,9 @@ class _BouncingPlayButtonState extends State<BouncingPlayButton>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Color(0xFF8B5CF6), // Vibrant Violet
-                    Color(0xFF6366F1), // Indigo
-                    Color(0xFF0EA5E9), // Sky Blue accent
+                    Color(0xFFA855F7), // Radiant Violet
+                    Color(0xFF06B6D4), // Electric Cyan
+                    Color(0xFFFB7185), // Warm Sunset Coral
                   ],
                 ),
               ),

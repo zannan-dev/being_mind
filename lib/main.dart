@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:being_mind/routes/app_router.dart';
 
 void main() {
-  runApp(const BoxBreathingApp());
+  runApp(const BeingMindApp());
 }
 
-class BoxBreathingApp extends StatelessWidget {
-  const BoxBreathingApp({super.key});
+class BeingMindApp extends StatelessWidget {
+  const BeingMindApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Box Breathing',
+      title: 'Being Mind',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Inter',
@@ -29,3 +29,7 @@ class BoxBreathingApp extends StatelessWidget {
     );
   }
 }
+
+// Backward compatibility alias
+typedef BoxBreathingApp = BeingMindApp;
+
