@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:being_mind/widgets/bouncing_wrapper.dart';
 
 class BreathingScreen extends StatefulWidget {
   final String exerciseName;
@@ -20,14 +21,15 @@ class _BreathingScreenState extends State<BreathingScreen>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: Duration(seconds: cycleDurationSeconds),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _controller.repeat();
-        }
-      });
+    _controller =
+        AnimationController(
+          vsync: this,
+          duration: Duration(seconds: cycleDurationSeconds),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            _controller.repeat();
+          }
+        });
   }
 
   @override
@@ -74,7 +76,10 @@ class _BreathingScreenState extends State<BreathingScreen>
             children: [
               // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 20,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -86,16 +91,20 @@ class _BreathingScreenState extends State<BreathingScreen>
                           color: Colors.white.withValues(alpha: 0.3),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.arrow_back_ios_new,
-                            color: Colors.white, size: 20),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
                     Text(
                       widget.exerciseName,
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Container(
                       padding: const EdgeInsets.all(8),
@@ -103,9 +112,12 @@ class _BreathingScreenState extends State<BreathingScreen>
                         color: Colors.transparent,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.settings,
-                          color: Colors.white, size: 24),
-                    )
+                      child: const Icon(
+                        Icons.settings,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -120,7 +132,6 @@ class _BreathingScreenState extends State<BreathingScreen>
                   final phaseText = _isPlaying ? _getPhaseText(value) : "Ready";
 
                   return BouncingWrapper(
-                    onTap: _togglePlayPause,
                     scaleDown: 0.04,
                     child: SizedBox(
                       width: 320,
@@ -134,20 +145,25 @@ class _BreathingScreenState extends State<BreathingScreen>
                             height: double.infinity,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                width: 1.5,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF8C64F5).withValues(alpha: 0.4),
+                                  color: const Color(
+                                    0xFF8C64F5,
+                                  ).withValues(alpha: 0.4),
                                   blurRadius: 20,
                                   spreadRadius: 5,
-                                )
+                                ),
                               ],
                             ),
                             child: CustomPaint(
                               painter: BreathingDialPainter(progress: value),
                             ),
                           ),
-                          
+
                           // Centered Content
                           Column(
                             mainAxisSize: MainAxisSize.min,
@@ -212,7 +228,7 @@ class BreathingDialPainter extends CustomPainter {
     final dotPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.4)
       ..style = PaintingStyle.fill;
-      
+
     final int numDots = 36;
     for (int i = 0; i < numDots; i++) {
       final angle = (i * 2 * pi) / numDots;
@@ -225,7 +241,7 @@ class BreathingDialPainter extends CustomPainter {
     final markerPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
-    
+
     // Position markers at top, right, bottom, left (angles: -pi/2, 0, pi/2, pi)
     final List<double> markerAngles = [-pi / 2, 0, pi / 2, pi];
     for (var angle in markerAngles) {
@@ -254,7 +270,7 @@ class BreathingDialPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round
         ..strokeWidth = 16.0
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10.0);
-        
+
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: trackRadius),
         -pi / 2,
@@ -265,11 +281,12 @@ class BreathingDialPainter extends CustomPainter {
 
       // Core solid progress arc
       final progressPaint = Paint()
-        ..color = const Color(0xFF7A6DF4) // vibrant purple
+        ..color =
+            const Color(0xFF7A6DF4) // vibrant purple
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeWidth = 6.0;
-        
+
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: trackRadius),
         -pi / 2,
@@ -282,28 +299,25 @@ class BreathingDialPainter extends CustomPainter {
       final thumbAngle = -pi / 2 + sweepAngle;
       final thumbX = center.dx + trackRadius * cos(thumbAngle);
       final thumbY = center.dy + trackRadius * sin(thumbAngle);
-      
+
       // Glow effect for the thumb
       final thumbGlowPaint = Paint()
         ..color = const Color(0xFF7A6DF4).withValues(alpha: 0.6)
         ..style = PaintingStyle.fill
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8.0);
       canvas.drawCircle(Offset(thumbX, thumbY), 18.0, thumbGlowPaint);
-      
+
       // Core solid thumb
       final thumbPaint = Paint()
         ..color = const Color(0xFF7A6DF4)
         ..style = PaintingStyle.fill;
       canvas.drawCircle(Offset(thumbX, thumbY), 10.0, thumbPaint);
     }
-    
+
     // Background gradient for the dial center
     final bgPaint = Paint()
       ..shader = RadialGradient(
-        colors: [
-          Colors.white.withValues(alpha: 0.2),
-          Colors.transparent,
-        ],
+        colors: [Colors.white.withValues(alpha: 0.2), Colors.transparent],
         stops: const [0.2, 1.0],
       ).createShader(Rect.fromCircle(center: center, radius: trackRadius));
     canvas.drawCircle(center, trackRadius, bgPaint);
@@ -342,9 +356,10 @@ class _BouncingPlayButtonState extends State<BouncingPlayButton>
       duration: const Duration(milliseconds: 150),
       reverseDuration: const Duration(milliseconds: 200),
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.85).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.85,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -382,13 +397,16 @@ class _BouncingPlayButtonState extends State<BouncingPlayButton>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.white.withValues(alpha: 0.3),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.5),
+              width: 1,
+            ),
             boxShadow: [
               BoxShadow(
                 color: const Color(0xFF8C64F5).withValues(alpha: 0.4),
                 blurRadius: 20,
                 spreadRadius: 5,
-              )
+              ),
             ],
           ),
           child: Center(
@@ -400,10 +418,7 @@ class _BouncingPlayButtonState extends State<BouncingPlayButton>
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFA084E8),
-                    Color(0xFF8C64F5),
-                  ],
+                  colors: [Color(0xFFA084E8), Color(0xFF8C64F5)],
                 ),
               ),
               child: Icon(
@@ -414,109 +429,6 @@ class _BouncingPlayButtonState extends State<BouncingPlayButton>
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class BouncingWrapper extends StatefulWidget {
-  final VoidCallback onTap;
-  final Widget child;
-  final double scaleDown;
-
-  const BouncingWrapper({
-    super.key,
-    required this.onTap,
-    required this.child,
-    this.scaleDown = 0.05,
-  });
-
-  @override
-  State<BouncingWrapper> createState() => _BouncingWrapperState();
-}
-
-class _BouncingWrapperState extends State<BouncingWrapper> {
-  bool _isPressed = false;
-  Offset _dragOffset = Offset.zero;
-
-  void _onPanDown(DragDownDetails details) {
-    HapticFeedback.lightImpact();
-    setState(() {
-      _isPressed = true;
-      _dragOffset = Offset.zero;
-    });
-  }
-
-  void _onPanUpdate(DragUpdateDetails details) {
-    setState(() {
-      _dragOffset += details.delta;
-      // Limit maximum stretch distance
-      if (_dragOffset.distance > 100) {
-        _dragOffset = Offset.fromDirection(_dragOffset.direction, 100);
-      }
-    });
-  }
-
-  void _onPanEnd(DragEndDetails details) {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _isPressed = false;
-      _dragOffset = Offset.zero;
-    });
-    // Trigger play/pause action
-    widget.onTap();
-  }
-
-  void _onPanCancel() {
-    setState(() {
-      _isPressed = false;
-      _dragOffset = Offset.zero;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Calculate squash and stretch factors based on drag distance
-    final double distance = _dragOffset.distance;
-    final double stretch = 1.0 + (distance / 400); // Stretch along drag axis
-    final double squash = 1.0 - (distance / 400); // Squash perpendicular axis
-    
-    // Handle the case where distance is 0 to avoid NaN direction
-    final double angle = distance > 0 ? _dragOffset.direction : 0;
-
-    Matrix4 transform = Matrix4.identity();
-    
-    // 1. Base press scale
-    final baseScale = _isPressed ? (1.0 - widget.scaleDown) : 1.0;
-    transform.scale(baseScale, baseScale);
-
-    // 2. Translate slightly with resistance in the direction of the drag
-    transform.translate(_dragOffset.dx * 0.4, _dragOffset.dy * 0.4); 
-    
-    // 3. Rotate to match drag angle
-    transform.rotateZ(angle);
-    
-    // 4. Apply stretch and squash relative to the drag angle
-    transform.scale(stretch, squash);
-    
-    // 5. Rotate back
-    transform.rotateZ(-angle);
-
-    return GestureDetector(
-      onPanDown: _onPanDown,
-      onPanUpdate: _onPanUpdate,
-      onPanEnd: _onPanEnd,
-      onPanCancel: _onPanCancel,
-      child: AnimatedContainer(
-        duration: _isPressed 
-            ? const Duration(milliseconds: 100) 
-            : const Duration(milliseconds: 800),
-        curve: _isPressed 
-            ? Curves.easeOut 
-            : Curves.elasticOut,
-        transform: transform,
-        transformAlignment: Alignment.center,
-        child: widget.child,
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:being_mind/routes/app_router.dart';
+import 'package:being_mind/widgets/bouncing_wrapper.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -85,7 +86,8 @@ class HomeScreen extends StatelessWidget {
     required String imageUrl,
     required List<Color> gradientColors,
   }) {
-    return GestureDetector(
+    return BouncingWrapper(
+      scaleDown: 0.03,
       onTap: () {
         Navigator.pushNamed(
           context,
