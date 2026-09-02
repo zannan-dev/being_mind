@@ -93,28 +93,28 @@ class HomeScreen extends StatelessWidget {
                     _buildExerciseCard(
                       context: context,
                       title: "Box\nBreathing",
-                      duration: "4 min",
-                      imageUrl:
-                          "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop",
-                      accentColor: const Color(0xFF8B5CF6),
+                      subtitle: "FOCUS & CONTROL",
+                      duration: "4 Cycles",
+                      imagePath: "assets/images/box_breathing.jpg",
+                      accentColor: const Color(0xFFA855F7),
                     ),
                     const SizedBox(height: 16),
                     _buildExerciseCard(
                       context: context,
-                      title: "Breathe with\nthe clouds",
-                      duration: "7 min",
-                      imageUrl:
-                          "https://images.unsplash.com/photo-1557672172-298e090bd0f1?q=80&w=800&auto=format&fit=crop",
-                      accentColor: const Color(0xFF38BDF8),
+                      title: "4-7-8 Relaxing\nBreath",
+                      subtitle: "DEEP SLEEP & CALM",
+                      duration: "4 Cycles",
+                      imagePath: "assets/images/relaxing_breath.jpg",
+                      accentColor: const Color(0xFFFB7185),
                     ),
                     const SizedBox(height: 16),
                     _buildExerciseCard(
                       context: context,
-                      title: "Monthly stress\nreflection",
-                      duration: "7 min",
-                      imageUrl:
-                          "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=800&auto=format&fit=crop",
-                      accentColor: const Color(0xFFF472B6),
+                      title: "Resonant\nCoherence",
+                      subtitle: "HEART HARMONY",
+                      duration: "6 Cycles",
+                      imagePath: "assets/images/app_icon.jpg",
+                      accentColor: const Color(0xFF06B6D4),
                     ),
                     const SizedBox(height: 32),
                   ],
@@ -130,8 +130,9 @@ class HomeScreen extends StatelessWidget {
   Widget _buildExerciseCard({
     required BuildContext context,
     required String title,
+    required String subtitle,
     required String duration,
-    required String imageUrl,
+    required String imagePath,
     required Color accentColor,
   }) {
     return BouncingWrapper(
@@ -168,7 +169,7 @@ class HomeScreen extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Left content: Title & Iridescent Play Button
+            // Left content: Subtitle & Title
             Expanded(
               flex: 11,
               child: Padding(
@@ -180,44 +181,26 @@ class HomeScreen extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: accentColor,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 22,
+                        fontSize: 21,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
-                        height: 1.15,
+                        height: 1.18,
                         letterSpacing: -0.3,
-                      ),
-                    ),
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFF8B5CF6), // Violet
-                            Color(0xFF6366F1), // Indigo
-                            Color(0xFF0EA5E9), // Sky blue
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.4),
-                            blurRadius: 14,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 26,
                       ),
                     ),
                   ],
@@ -238,18 +221,7 @@ class HomeScreen extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: accentColor.withValues(alpha: 0.25),
-                        child: Icon(
-                          Icons.spa_rounded,
-                          color: Colors.white.withValues(alpha: 0.4),
-                          size: 36,
-                        ),
-                      ),
-                    ),
+                    _buildCardImage(imagePath, accentColor),
                     // Ambient gradient overlay to blend into dark cosmic theme
                     Container(
                       decoration: BoxDecoration(
@@ -301,4 +273,34 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildCardImage(String path, Color accentColor) {
+    if (path.startsWith('assets/')) {
+      return Image.asset(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            _buildPlaceholder(accentColor),
+      );
+    } else {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            _buildPlaceholder(accentColor),
+      );
+    }
+  }
+
+  Widget _buildPlaceholder(Color accentColor) {
+    return Container(
+      color: accentColor.withValues(alpha: 0.25),
+      child: Icon(
+        Icons.spa_rounded,
+        color: Colors.white.withValues(alpha: 0.4),
+        size: 36,
+      ),
+    );
+  }
 }
+

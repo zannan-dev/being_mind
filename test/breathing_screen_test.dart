@@ -25,8 +25,12 @@ void main() {
     await tester.tap(find.byType(BouncingPlayButton));
     await tester.pump(const Duration(milliseconds: 200));
 
-    // After play starts, icon should switch to pause
+    // During preparation delay, shows pause icon and "Get Ready"
     expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+    expect(find.text('Get Ready'), findsOneWidget);
+
+    // Advance past preparation delay (3 seconds) to begin Inhale
+    await tester.pump(const Duration(seconds: 3));
     expect(find.text('Inhale'), findsOneWidget);
 
     // Forward through breathing animation
@@ -297,8 +301,9 @@ void main() {
     );
 
     // Start playing
+    // Start exercise and advance past 3s prep delay into active breath
     await tester.tap(find.byType(BouncingPlayButton));
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(seconds: 2));
 
     // Pause
@@ -368,6 +373,84 @@ void main() {
     // The scale differences between consecutive 200ms frames are tiny and continuous (no sudden jump)
     expect((scaleAtHold - scaleBeforeHold).abs(), lessThan(0.04));
     expect((scaleAfterHold - scaleAtHold).abs(), lessThan(0.04));
+  });
+
+  testWidgets(
+      'BreathingScreen displays fixed cycle count and toggles target cycles',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: BreathingScreen(exerciseName: '4-7-8 Relaxing Breath'),
+      ),
+    );
+
+    // Initial state: shows 19s cycle and target cycles / 4
+    expect(find.text('19s cycle'), findsOneWidget);
+    expect(find.text('Completed: 0'), findsOneWidget);
+    expect(find.text(' / 4'), findsOneWidget);
+
+    // Tapping the cycle badge when idle toggles target cycles (4 -> 8 -> 12)
+    await tester.tap(find.text('Completed: 0'));
+    await tester.pump();
+    expect(find.text(' / 8'), findsOneWidget);
+  });
+
+  testWidgets(
+      'BreathingScreen transitions text smoothly using AnimatedSwitcher',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: BreathingScreen(exerciseName: 'Box Breathing'),
+      ),
+    );
+
+    // Verify AnimatedSwitcher is used for status text elements
+    expect(find.byType(AnimatedSwitcher), findsAtLeastNWidgets(3));
+
+    // Start exercise and verify smooth transition into Get Ready
+    await tester.tap(find.byType(BouncingPlayButton));
+    await tester.pump(const Duration(milliseconds: 90)); // Mid-fade
+    await tester.pump(const Duration(milliseconds: 150)); // Finished fade
+    expect(find.text('Get Ready'), findsOneWidget);
+
+    // Advance past preparation delay into Inhale
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('Inhale'), findsOneWidget);
+  });
+
+  testWidgets(
+      'BreathingScreen counts down preparation delay and can be cancelled before exercise starts',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: BreathingScreen(exerciseName: 'Box Breathing'),
+      ),
+    );
+
+    // Initial state
+    expect(find.text('Ready'), findsOneWidget);
+
+    // Tap play to enter preparation delay
+    await tester.tap(find.byType(BouncingPlayButton));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // Shows countdown 3s and "Get Ready"
+    expect(find.text('Get Ready'), findsOneWidget);
+    expect(find.text('3s'), findsOneWidget);
+
+    // After 1 second, counts down to 2s
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('2s'), findsOneWidget);
+
+    // After another second, counts down to 1s
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('1s'), findsOneWidget);
+
+    // Tapping play/pause during countdown cancels preparation and returns to Ready
+    await tester.tap(find.byType(BouncingPlayButton));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Ready'), findsOneWidget);
+    expect(find.text('16s cycle'), findsOneWidget);
   });
 }
 

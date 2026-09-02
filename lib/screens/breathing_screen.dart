@@ -1,10 +1,17 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class BreathingScreen extends StatefulWidget {
   final String exerciseName;
-  const BreathingScreen({super.key, this.exerciseName = "Box Breathing"});
+  final Duration startDelay;
+
+  const BreathingScreen({
+    super.key,
+    this.exerciseName = "Box Breathing",
+    this.startDelay = const Duration(seconds: 3),
+  });
 
   @override
   State<BreathingScreen> createState() => _BreathingScreenState();
@@ -24,16 +31,38 @@ class _BreathingScreenState extends State<BreathingScreen>
   double _dragAngle = 0.0;
   double _dragStretch = 0.0;
   bool _isPlaying = false;
+  bool _isPreparing = false;
+  int _prepSecondsRemaining = 3;
+  Timer? _prepTimer;
   int _completedCycles = 0;
   double _lastBreathProgress = 0.0;
 
-  final int cycleDurationSeconds = 16; // 4s inhale, 4s hold, 4s exhale, 4s hold
+  int get cycleDurationSeconds {
+    if (widget.exerciseName.contains('4-7-8')) return 19;
+    if (widget.exerciseName.contains('Resonant') ||
+        widget.exerciseName.contains('Coherence')) {
+      return 11;
+    }
+    return 16;
+  }
+
+  int get defaultTargetCycles {
+    if (widget.exerciseName.contains('4-7-8')) return 4;
+    if (widget.exerciseName.contains('Resonant') ||
+        widget.exerciseName.contains('Coherence')) {
+      return 6;
+    }
+    return 4;
+  }
+
+  late int _targetCycles;
 
   @override
   void initState() {
     super.initState();
+    _targetCycles = defaultTargetCycles;
 
-    // 16-second breathing cycle controller
+    // Dynamic breathing cycle controller
     _breathingController =
         AnimationController(
           vsync: this,
@@ -42,9 +71,21 @@ class _BreathingScreenState extends State<BreathingScreen>
           final currentVal = _breathingController.value;
           // Seamless cycle increment when repeating without frame drops
           if (_isPlaying && currentVal < _lastBreathProgress - 0.5) {
-            setState(() {
-              _completedCycles++;
-            });
+            final nextCycles = _completedCycles + 1;
+            if (nextCycles >= _targetCycles) {
+              _breathingController.stop();
+              _breathingController.value = 0.0;
+              setState(() {
+                _completedCycles = nextCycles;
+                _isPlaying = false;
+                _lastBreathProgress = 0.0;
+              });
+              HapticFeedback.heavyImpact();
+            } else {
+              setState(() {
+                _completedCycles = nextCycles;
+              });
+            }
           }
           _lastBreathProgress = currentVal;
         });
@@ -83,6 +124,7 @@ class _BreathingScreenState extends State<BreathingScreen>
 
   @override
   void dispose() {
+    _prepTimer?.cancel();
     _breathingController.dispose();
     _fluidController.dispose();
     _springController.dispose();
@@ -91,13 +133,13 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   void _onPanStart(DragStartDetails details) {
-    if (_isPlaying) return;
+    if (_isPlaying || _isPreparing) return;
     _springController.stop();
     HapticFeedback.lightImpact();
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    if (_isPlaying) return;
+    if (_isPlaying || _isPreparing) return;
     setState(() {
       final raw = _dragOffset + details.delta;
       final dist = raw.distance;
@@ -111,7 +153,7 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   void _onPanEnd(DragEndDetails details) {
-    if (_isPlaying) return;
+    if (_isPlaying || _isPreparing) return;
     HapticFeedback.mediumImpact();
     _springAnimation = Tween<Offset>(begin: _dragOffset, end: Offset.zero)
         .animate(
@@ -121,12 +163,12 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   void _onPanCancel() {
-    if (_isPlaying) return;
+    if (_isPlaying || _isPreparing) return;
     _onPanEnd(DragEndDetails());
   }
 
   void _onOrbTap() {
-    if (_isPlaying) return;
+    if (_isPlaying || _isPreparing) return;
     HapticFeedback.lightImpact();
     _springController.stop();
     _springAnimation =
@@ -139,22 +181,88 @@ class _BreathingScreenState extends State<BreathingScreen>
   void _togglePlayPause() {
     HapticFeedback.mediumImpact();
     _resetController.stop();
-    setState(() {
-      _isPlaying = !_isPlaying;
-      if (_isPlaying) {
-        _springController.stop();
-        _dragOffset = Offset.zero;
-        _dragStretch = 0.0;
-        _dragAngle = 0.0;
-        _breathingController.repeat();
+
+    // If tapped during preparation countdown, cancel preparation
+    if (_isPreparing) {
+      _prepTimer?.cancel();
+      setState(() {
+        _isPreparing = false;
+        _isPlaying = false;
+      });
+      return;
+    }
+
+    if (_isPlaying) {
+      // Pause
+      _breathingController.stop();
+      setState(() {
+        _isPlaying = false;
+      });
+    } else {
+      // Starting from beginning or after completion
+      if (_breathingController.value == 0.0 ||
+          _completedCycles >= _targetCycles) {
+        if (_completedCycles >= _targetCycles) {
+          _completedCycles = 0;
+        }
+        if (widget.startDelay > Duration.zero) {
+          _startPreparation();
+        } else {
+          _startExerciseNow();
+        }
       } else {
-        _breathingController.stop();
+        // Resuming paused breath mid-cycle
+        _startExerciseNow();
+      }
+    }
+  }
+
+  void _startPreparation() {
+    _prepTimer?.cancel();
+    setState(() {
+      _isPreparing = true;
+      _prepSecondsRemaining = widget.startDelay.inSeconds;
+      _springController.stop();
+      _dragOffset = Offset.zero;
+      _dragStretch = 0.0;
+      _dragAngle = 0.0;
+    });
+    HapticFeedback.lightImpact();
+
+    _prepTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_prepSecondsRemaining > 1) {
+        setState(() {
+          _prepSecondsRemaining--;
+        });
+        HapticFeedback.selectionClick();
+      } else {
+        timer.cancel();
+        _startExerciseNow();
       }
     });
   }
 
+  void _startExerciseNow() {
+    _prepTimer?.cancel();
+    setState(() {
+      _isPreparing = false;
+      _isPlaying = true;
+      _springController.stop();
+      _dragOffset = Offset.zero;
+      _dragStretch = 0.0;
+      _dragAngle = 0.0;
+      _breathingController.repeat();
+    });
+    HapticFeedback.mediumImpact();
+  }
+
   void _resetExercise() {
     HapticFeedback.mediumImpact();
+    _prepTimer?.cancel();
 
     // Capture visual starting state for smooth, direct return
     final double startScale =
@@ -172,6 +280,7 @@ class _BreathingScreenState extends State<BreathingScreen>
     _springController.stop();
 
     setState(() {
+      _isPreparing = false;
       _isPlaying = false;
       _completedCycles = 0;
       _dragOffset = Offset.zero;
@@ -198,47 +307,105 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   String _getPhaseText(double value) {
-    if (value < 0.25) return "Inhale";
-    if (value < 0.50) return "Hold";
-    if (value < 0.75) return "Exhale";
-    return "Hold";
+    if (widget.exerciseName.contains('4-7-8')) {
+      if (value < 4.0 / 19.0) return "Inhale";
+      if (value < 11.0 / 19.0) return "Hold";
+      return "Exhale";
+    } else if (widget.exerciseName.contains('Resonant') ||
+        widget.exerciseName.contains('Coherence')) {
+      if (value < 0.50) return "Inhale";
+      return "Exhale";
+    } else {
+      if (value < 0.25) return "Inhale";
+      if (value < 0.50) return "Hold";
+      if (value < 0.75) return "Exhale";
+      return "Hold";
+    }
   }
 
   String _getPhaseInstruction(double value) {
-    if (value < 0.25) return "Deeply through your nose";
-    if (value < 0.50) return "Keep the breath still";
-    if (value < 0.75) return "Slowly through your mouth";
-    return "Relax and reset";
+    if (widget.exerciseName.contains('4-7-8')) {
+      if (value < 4.0 / 19.0) return "Inhale quietly through your nose";
+      if (value < 11.0 / 19.0) return "Hold your breath calmly";
+      return "Exhale fully through your mouth";
+    } else if (widget.exerciseName.contains('Resonant') ||
+        widget.exerciseName.contains('Coherence')) {
+      if (value < 0.50) return "Smooth, steady breath in";
+      return "Gentle, effortless breath out";
+    } else {
+      if (value < 0.25) return "Deeply through your nose";
+      if (value < 0.50) return "Keep the breath still";
+      if (value < 0.75) return "Slowly through your mouth";
+      return "Relax and reset";
+    }
   }
 
   int _getPhaseSecondsRemaining(double value) {
-    final phaseProgress = (value % 0.25) / 0.25;
-    final remaining = 4 - (phaseProgress * 4).floor();
-    return remaining.clamp(1, 4);
+    if (widget.exerciseName.contains('4-7-8')) {
+      final t = value * 19.0;
+      if (t < 4.0) return (4 - t.floor()).clamp(1, 4);
+      if (t < 11.0) return (11 - t.floor()).clamp(1, 7);
+      return (19 - t.floor()).clamp(1, 8);
+    } else if (widget.exerciseName.contains('Resonant') ||
+        widget.exerciseName.contains('Coherence')) {
+      final t = value * 11.0;
+      if (t < 5.5) return (6 - t.floor()).clamp(1, 6);
+      return (11 - t.floor()).clamp(1, 6);
+    } else {
+      final phaseProgress = (value % 0.25) / 0.25;
+      final remaining = 4 - (phaseProgress * 4).floor();
+      return remaining.clamp(1, 4);
+    }
   }
 
   /// Calculates the dynamic scale of the bubble for breathing:
-  /// - Inhale (0.0 to 0.25): Smooth expansion from 0.85 to 1.15
-  /// - Hold (0.25 to 0.50): Suspended at peak size 1.15 with subtle micro-float
-  /// - Exhale (0.50 to 0.75): Smooth contraction from 1.15 to 0.85
-  /// - Hold (0.75 to 1.00): Resting state at 0.85
+  /// - Box Breathing: 4-4-4-4
+  /// - 4-7-8: 4s inhale, 7s hold, 8s exhale
+  /// - Resonant Coherence: 5.5s inhale, 5.5s exhale
   double _getBreathingScale(double progress) {
-    if (progress < 0.25) {
-      final t = Curves.easeInOutCubic.transform(progress / 0.25);
-      return 0.85 + 0.30 * t;
-    } else if (progress < 0.50) {
-      final holdT = (progress - 0.25) / 0.25;
-      // Smooth C1-continuous micro-suspension with zero velocity at entry and exit
-      final float = 0.5 * (1.0 - cos(holdT * 2 * pi));
-      return 1.15 + 0.015 * float;
-    } else if (progress < 0.75) {
-      final t = Curves.easeInOutCubic.transform((progress - 0.50) / 0.25);
-      return 1.15 - 0.30 * t;
+    if (widget.exerciseName.contains('4-7-8')) {
+      const inhaleEnd = 4.0 / 19.0;
+      const holdEnd = 11.0 / 19.0;
+      if (progress < inhaleEnd) {
+        final t = Curves.easeInOutCubic.transform(progress / inhaleEnd);
+        return 0.85 + 0.30 * t;
+      } else if (progress < holdEnd) {
+        final holdT = (progress - inhaleEnd) / (holdEnd - inhaleEnd);
+        final float = 0.5 * (1.0 - cos(holdT * 2 * pi));
+        return 1.15 + 0.015 * float;
+      } else {
+        final t = Curves.easeInOutCubic.transform(
+          (progress - holdEnd) / (1.0 - holdEnd),
+        );
+        return 1.15 - 0.30 * t;
+      }
+    } else if (widget.exerciseName.contains('Resonant') ||
+        widget.exerciseName.contains('Coherence')) {
+      if (progress < 0.50) {
+        final t = Curves.easeInOutCubic.transform(progress / 0.50);
+        return 0.85 + 0.30 * t;
+      } else {
+        final t = Curves.easeInOutCubic.transform((progress - 0.50) / 0.50);
+        return 1.15 - 0.30 * t;
+      }
     } else {
-      final restT = (progress - 0.75) / 0.25;
-      // Smooth C1-continuous micro-rest with zero velocity at entry and exit
-      final float = 0.5 * (1.0 - cos(restT * 2 * pi));
-      return 0.85 - 0.010 * float;
+      if (progress < 0.25) {
+        final t = Curves.easeInOutCubic.transform(progress / 0.25);
+        return 0.85 + 0.30 * t;
+      } else if (progress < 0.50) {
+        final holdT = (progress - 0.25) / 0.25;
+        // Smooth C1-continuous micro-suspension with zero velocity at entry and exit
+        final float = 0.5 * (1.0 - cos(holdT * 2 * pi));
+        return 1.15 + 0.015 * float;
+      } else if (progress < 0.75) {
+        final t = Curves.easeInOutCubic.transform((progress - 0.50) / 0.25);
+        return 1.15 - 0.30 * t;
+      } else {
+        final restT = (progress - 0.75) / 0.25;
+        // Smooth C1-continuous micro-rest with zero velocity at entry and exit
+        final float = 0.5 * (1.0 - cos(restT * 2 * pi));
+        return 0.85 - 0.010 * float;
+      }
     }
   }
 
@@ -289,19 +456,33 @@ class _BreathingScreenState extends State<BreathingScreen>
                       _resetController.isAnimating && _resetOffsetAnimation != null
                           ? _resetOffsetAnimation!.value
                           : _dragOffset;
-                  final isAtRest = _breathingController.value == 0.0 ||
+                  final isAtRest =
+                      (_breathingController.value == 0.0 &&
+                          !_isPlaying &&
+                          !_isPreparing) ||
                       _resetController.isAnimating;
-                  final phase = _isPlaying
-                      ? _getPhaseText(breathProgress)
-                      : (isAtRest ? "Ready" : "Paused");
-                  final secondsRemaining = _isPlaying
-                      ? "${_getPhaseSecondsRemaining(breathProgress)}s"
-                      : (isAtRest
-                          ? "16s cycle"
-                          : "${_getPhaseSecondsRemaining(breathProgress)}s");
-                  final instruction = _isPlaying
-                      ? _getPhaseInstruction(breathProgress)
-                      : (isAtRest ? "Tap play to begin" : "Tap to resume");
+                  final isCompleted = _completedCycles >= _targetCycles;
+                  final phase = _isPreparing
+                      ? "Get Ready"
+                      : (isCompleted
+                          ? "Complete"
+                          : (_isPlaying
+                              ? _getPhaseText(breathProgress)
+                              : (isAtRest ? "Ready" : "Paused")));
+                  final secondsRemaining = _isPreparing
+                      ? "${_prepSecondsRemaining}s"
+                      : (_isPlaying
+                          ? "${_getPhaseSecondsRemaining(breathProgress)}s"
+                          : (isAtRest
+                              ? "${cycleDurationSeconds}s cycle"
+                              : "${_getPhaseSecondsRemaining(breathProgress)}s"));
+                  final instruction = _isPreparing
+                      ? "Settle in and relax your shoulders"
+                      : (isCompleted
+                          ? "Session completed! Tap to repeat"
+                          : (_isPlaying
+                              ? _getPhaseInstruction(breathProgress)
+                              : (isAtRest ? "Tap play to begin" : "Tap to resume")));
 
                   return Stack(
                     alignment: Alignment.center,
@@ -333,14 +514,24 @@ class _BreathingScreenState extends State<BreathingScreen>
                                 child: Transform.scale(
                                   scale: currentScale,
                                   child: IgnorePointer(
-                                    ignoring: _isPlaying,
+                                    ignoring: _isPlaying || _isPreparing,
                                     child: GestureDetector(
                                       behavior: HitTestBehavior.opaque,
-                                      onPanStart: _isPlaying ? null : _onPanStart,
-                                      onPanUpdate: _isPlaying ? null : _onPanUpdate,
-                                      onPanEnd: _isPlaying ? null : _onPanEnd,
-                                      onPanCancel: _isPlaying ? null : _onPanCancel,
-                                      onTap: _isPlaying ? null : _onOrbTap,
+                                      onPanStart: _isPlaying || _isPreparing
+                                          ? null
+                                          : _onPanStart,
+                                      onPanUpdate: _isPlaying || _isPreparing
+                                          ? null
+                                          : _onPanUpdate,
+                                      onPanEnd: _isPlaying || _isPreparing
+                                          ? null
+                                          : _onPanEnd,
+                                      onPanCancel: _isPlaying || _isPreparing
+                                          ? null
+                                          : _onPanCancel,
+                                      onTap: _isPlaying || _isPreparing
+                                          ? null
+                                          : _onOrbTap,
                                       child: SizedBox(
                                         width: orbDimension,
                                         height: orbDimension,
@@ -437,91 +628,195 @@ class _BreathingScreenState extends State<BreathingScreen>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              phase,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 34,
-                                fontWeight: FontWeight.w300,
-                                letterSpacing: 1.2,
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0.0, 0.12),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                              child: Text(
+                                phase,
+                                key: ValueKey<String>(phase),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w300,
+                                  letterSpacing: 1.2,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 6),
-                            Text(
-                              instruction,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.6),
-                                fontSize: 15,
-                                fontWeight: FontWeight.w400,
-                                letterSpacing: 0.3,
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0.0, 0.12),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                              child: Text(
+                                instruction,
+                                key: ValueKey<String>(instruction),
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0.3,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 8),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.12),
-                                      width: 1,
+                                // Pill 1: Stable, non-jumping cycle/countdown indicator
+                                AnimatedSize(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeOutCubic,
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                      minWidth: 96,
+                                      minHeight: 28,
                                     ),
-                                  ),
-                                  child: Text(
-                                    secondsRemaining,
-                                    style: TextStyle(
-                                      color: const Color(
-                                        0xFFB8C8FF,
-                                      ).withValues(alpha: 0.9),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.5,
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.08,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      transitionBuilder: (child, animation) =>
+                                          FadeTransition(
+                                            opacity: animation,
+                                            child: child,
+                                          ),
+                                      child: Text(
+                                        secondsRemaining,
+                                        key: ValueKey<String>(secondsRemaining),
+                                        style: TextStyle(
+                                          color: const Color(
+                                            0xFFB8C8FF,
+                                          ).withValues(alpha: 0.9),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.5,
+                                          fontFeatures: const [
+                                            FontFeature.tabularFigures(),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF8B5CF6,
-                                    ).withValues(alpha: 0.16),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: const Color(
-                                        0xFFC084FC,
-                                      ).withValues(alpha: 0.28),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.repeat_rounded,
-                                        size: 13,
-                                        color: Color(0xFFDDD6FE),
+                                // Pill 2: Stable, non-jumping completed cycles badge
+                                GestureDetector(
+                                  onTap: _isPlaying || _isPreparing
+                                      ? null
+                                      : () {
+                                          HapticFeedback.selectionClick();
+                                          setState(() {
+                                            if (_targetCycles == 4) {
+                                              _targetCycles = 8;
+                                            } else if (_targetCycles == 8) {
+                                              _targetCycles = 12;
+                                            } else {
+                                              _targetCycles = 4;
+                                            }
+                                          });
+                                        },
+                                  child: AnimatedSize(
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeOutCubic,
+                                    child: Container(
+                                      constraints: const BoxConstraints(
+                                        minWidth: 152,
+                                        minHeight: 28,
                                       ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        "Completed: $_completedCycles",
-                                        style: const TextStyle(
-                                          color: Color(0xFFDDD6FE),
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          letterSpacing: 0.4,
+                                      alignment: Alignment.center,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFF8B5CF6,
+                                        ).withValues(alpha: 0.16),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: const Color(
+                                            0xFFC084FC,
+                                          ).withValues(alpha: 0.28),
+                                          width: 1,
                                         ),
                                       ),
-                                    ],
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(
+                                            Icons.repeat_rounded,
+                                            size: 13,
+                                            color: Color(0xFFDDD6FE),
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            "Completed: $_completedCycles",
+                                            style: const TextStyle(
+                                              color: Color(0xFFDDD6FE),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.4,
+                                              fontFeatures: [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                            ),
+                                          ),
+                                          Text(
+                                            " / $_targetCycles",
+                                            style: TextStyle(
+                                              color: const Color(
+                                                0xFFDDD6FE,
+                                              ).withValues(alpha: 0.65),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: 0.3,
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -543,6 +838,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                               enabled: _breathingController.value > 0.0 ||
                                   _completedCycles > 0 ||
                                   _isPlaying ||
+                                  _isPreparing ||
                                   _dragOffset != Offset.zero ||
                                   _resetController.isAnimating,
                               onTap: _resetExercise,
@@ -550,7 +846,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                             const SizedBox(width: 24),
                             // Main Play/Pause Button
                             BouncingPlayButton(
-                              isPlaying: _isPlaying,
+                              isPlaying: _isPlaying || _isPreparing,
                               onTap: _togglePlayPause,
                             ),
                             const SizedBox(width: 24),
