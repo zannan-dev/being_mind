@@ -1,20 +1,23 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:being_mind/main.dart';
 
 void main() {
   testWidgets('App renders smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const BoxBreathingApp());
+    final originalOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      if (details.exception is NetworkImageLoadException ||
+          details.exception.toString().contains('NetworkImageLoadException') ||
+          details.exception.toString().contains('statusCode: 400')) {
+        // Ignore network image exceptions during offline testing
+        return;
+      }
+      originalOnError?.call(details);
+    };
 
-    // Verify that our title is present.
-    expect(find.text('How do you\nfeel today?'), findsOneWidget);
+    await tester.pumpWidget(const BoxBreathingApp());
+    expect(find.text('Exercises'), findsOneWidget);
+
+    FlutterError.onError = originalOnError;
   });
 }

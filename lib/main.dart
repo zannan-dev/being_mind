@@ -15,7 +15,12 @@ class BoxBreathingApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Inter',
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFA084E8)),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF090B14),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF8B5CF6),
+          brightness: Brightness.dark,
+        ),
         useMaterial3: true,
         platform: TargetPlatform.iOS,
       ),
