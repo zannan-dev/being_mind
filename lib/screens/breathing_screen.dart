@@ -1,9 +1,17 @@
-import 'dart:async';
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import '../providers/breathing_provider.dart';
+import '../widgets/bouncing_play_button.dart';
+import '../widgets/bouncing_reset_button.dart';
+import '../painters/background_waves_painter.dart';
+import '../painters/iridescent_bubble_painter.dart';
 
-class BreathingScreen extends StatefulWidget {
+
+class BreathingScreen extends ConsumerStatefulWidget {
   final String exerciseName;
   final Duration startDelay;
 
@@ -14,10 +22,10 @@ class BreathingScreen extends StatefulWidget {
   });
 
   @override
-  State<BreathingScreen> createState() => _BreathingScreenState();
+  ConsumerState<BreathingScreen> createState() => _BreathingScreenState();
 }
 
-class _BreathingScreenState extends State<BreathingScreen>
+class _BreathingScreenState extends ConsumerState<BreathingScreen>
     with TickerProviderStateMixin {
   late AnimationController _breathingController;
   late AnimationController _fluidController;
@@ -30,12 +38,16 @@ class _BreathingScreenState extends State<BreathingScreen>
   Offset _dragOffset = Offset.zero;
   double _dragAngle = 0.0;
   double _dragStretch = 0.0;
-  bool _isPlaying = false;
-  bool _isPreparing = false;
-  int _prepSecondsRemaining = 3;
-  Timer? _prepTimer;
-  int _completedCycles = 0;
   double _lastBreathProgress = 0.0;
+  
+  late FlutterTts _flutterTts;
+  bool _isMuted = false;
+  String _lastPhaseText = "";
+
+  BreathingSessionProvider get _sessionProvider => breathingSessionProvider(
+        defaultTargetCycles: defaultTargetCycles,
+        startDelay: widget.startDelay,
+      );
 
   int get cycleDurationSeconds {
     if (widget.exerciseName.contains('4-7-8')) return 19;
@@ -55,12 +67,15 @@ class _BreathingScreenState extends State<BreathingScreen>
     return 4;
   }
 
-  late int _targetCycles;
-
   @override
   void initState() {
     super.initState();
-    _targetCycles = defaultTargetCycles;
+
+    _flutterTts = FlutterTts();
+    _flutterTts.setLanguage("en-US");
+    _flutterTts.setSpeechRate(0.4);
+    _flutterTts.setVolume(1.0);
+    _flutterTts.setPitch(1.0);
 
     // Dynamic breathing cycle controller
     _breathingController =
@@ -70,21 +85,47 @@ class _BreathingScreenState extends State<BreathingScreen>
         )..addListener(() {
           final currentVal = _breathingController.value;
           // Seamless cycle increment when repeating without frame drops
-          if (_isPlaying && currentVal < _lastBreathProgress - 0.5) {
-            final nextCycles = _completedCycles + 1;
-            if (nextCycles >= _targetCycles) {
-              _breathingController.stop();
+          final session = ref.read(_sessionProvider);
+          
+          if (session.isPlaying) {
+             final currentPhaseText = _getPhaseText(currentVal);
+             if (currentPhaseText != _lastPhaseText) {
+                _lastPhaseText = currentPhaseText;
+                
+                if (currentPhaseText == "Inhale") {
+                   // 1 Tap for Inhale
+                   HapticFeedback.lightImpact();
+                } else if (currentPhaseText == "Hold") {
+                   // 2 Taps for Hold
+                   HapticFeedback.selectionClick();
+                   Future.delayed(const Duration(milliseconds: 200), () {
+                     HapticFeedback.selectionClick();
+                   });
+                } else if (currentPhaseText == "Exhale") {
+                   // 3 Taps for Exhale
+                   HapticFeedback.heavyImpact();
+                   Future.delayed(const Duration(milliseconds: 200), () {
+                     HapticFeedback.heavyImpact();
+                   });
+                   Future.delayed(const Duration(milliseconds: 400), () {
+                     HapticFeedback.heavyImpact();
+                   });
+                }
+                
+                if (!_isMuted) {
+                   _flutterTts.speak(currentPhaseText);
+                }
+             }
+          }
+          
+          if (session.isPlaying && currentVal < _lastBreathProgress - 0.5) {
+            ref.read(_sessionProvider.notifier).incrementCycle();
+            if (session.completedCycles + 1 >= session.targetCycles) {
               _breathingController.value = 0.0;
-              setState(() {
-                _completedCycles = nextCycles;
-                _isPlaying = false;
-                _lastBreathProgress = 0.0;
-              });
+              _lastBreathProgress = 0.0;
+              _lastPhaseText = "";
+              if (!_isMuted) _flutterTts.speak("Session complete");
               HapticFeedback.heavyImpact();
-            } else {
-              setState(() {
-                _completedCycles = nextCycles;
-              });
             }
           }
           _lastBreathProgress = currentVal;
@@ -124,7 +165,7 @@ class _BreathingScreenState extends State<BreathingScreen>
 
   @override
   void dispose() {
-    _prepTimer?.cancel();
+    _flutterTts.stop();
     _breathingController.dispose();
     _fluidController.dispose();
     _springController.dispose();
@@ -133,13 +174,13 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   void _onPanStart(DragStartDetails details) {
-    if (_isPlaying || _isPreparing) return;
+    if (ref.read(_sessionProvider).isPlaying || ref.read(_sessionProvider).isPreparing) return;
     _springController.stop();
     HapticFeedback.lightImpact();
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    if (_isPlaying || _isPreparing) return;
+    if (ref.read(_sessionProvider).isPlaying || ref.read(_sessionProvider).isPreparing) return;
     setState(() {
       final raw = _dragOffset + details.delta;
       final dist = raw.distance;
@@ -153,7 +194,7 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   void _onPanEnd(DragEndDetails details) {
-    if (_isPlaying || _isPreparing) return;
+    if (ref.read(_sessionProvider).isPlaying || ref.read(_sessionProvider).isPreparing) return;
     HapticFeedback.mediumImpact();
     _springAnimation = Tween<Offset>(begin: _dragOffset, end: Offset.zero)
         .animate(
@@ -163,12 +204,12 @@ class _BreathingScreenState extends State<BreathingScreen>
   }
 
   void _onPanCancel() {
-    if (_isPlaying || _isPreparing) return;
+    if (ref.read(_sessionProvider).isPlaying || ref.read(_sessionProvider).isPreparing) return;
     _onPanEnd(DragEndDetails());
   }
 
   void _onOrbTap() {
-    if (_isPlaying || _isPreparing) return;
+    if (ref.read(_sessionProvider).isPlaying || ref.read(_sessionProvider).isPreparing) return;
     HapticFeedback.lightImpact();
     _springController.stop();
     _springAnimation =
@@ -181,88 +222,22 @@ class _BreathingScreenState extends State<BreathingScreen>
   void _togglePlayPause() {
     HapticFeedback.mediumImpact();
     _resetController.stop();
-
-    // If tapped during preparation countdown, cancel preparation
-    if (_isPreparing) {
-      _prepTimer?.cancel();
-      setState(() {
-        _isPreparing = false;
-        _isPlaying = false;
-      });
-      return;
-    }
-
-    if (_isPlaying) {
-      // Pause
-      _breathingController.stop();
-      setState(() {
-        _isPlaying = false;
-      });
-    } else {
-      // Starting from beginning or after completion
-      if (_breathingController.value == 0.0 ||
-          _completedCycles >= _targetCycles) {
-        if (_completedCycles >= _targetCycles) {
-          _completedCycles = 0;
-        }
-        if (widget.startDelay > Duration.zero) {
-          _startPreparation();
-        } else {
-          _startExerciseNow();
-        }
-      } else {
-        // Resuming paused breath mid-cycle
-        _startExerciseNow();
-      }
-    }
-  }
-
-  void _startPreparation() {
-    _prepTimer?.cancel();
-    setState(() {
-      _isPreparing = true;
-      _prepSecondsRemaining = widget.startDelay.inSeconds;
-      _springController.stop();
-      _dragOffset = Offset.zero;
-      _dragStretch = 0.0;
-      _dragAngle = 0.0;
-    });
-    HapticFeedback.lightImpact();
-
-    _prepTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
+    
+    final session = ref.read(_sessionProvider);
+    if (!session.isPlaying && !session.isPreparing) {
+      if (session.completedCycles == 0 && _breathingController.value == 0.0) {
+        // Very first start
+        ref.read(_sessionProvider.notifier).startPreparation();
         return;
       }
-      if (_prepSecondsRemaining > 1) {
-        setState(() {
-          _prepSecondsRemaining--;
-        });
-        HapticFeedback.selectionClick();
-      } else {
-        timer.cancel();
-        _startExerciseNow();
-      }
-    });
-  }
-
-  void _startExerciseNow() {
-    _prepTimer?.cancel();
-    setState(() {
-      _isPreparing = false;
-      _isPlaying = true;
-      _springController.stop();
-      _dragOffset = Offset.zero;
-      _dragStretch = 0.0;
-      _dragAngle = 0.0;
-      _breathingController.repeat();
-    });
-    HapticFeedback.mediumImpact();
+    }
+    
+    ref.read(_sessionProvider.notifier).togglePlayPause();
   }
 
   void _resetExercise() {
     HapticFeedback.mediumImpact();
-    _prepTimer?.cancel();
+    ref.read(_sessionProvider.notifier).resetExercise();
 
     // Capture visual starting state for smooth, direct return
     final double startScale =
@@ -280,13 +255,11 @@ class _BreathingScreenState extends State<BreathingScreen>
     _springController.stop();
 
     setState(() {
-      _isPreparing = false;
-      _isPlaying = false;
-      _completedCycles = 0;
       _dragOffset = Offset.zero;
       _dragStretch = 0.0;
       _dragAngle = 0.0;
       _lastBreathProgress = 0.0;
+      _lastPhaseText = "";
     });
 
     // Directly interpolate scale back to resting baseline 0.85 and offset to zero
@@ -411,6 +384,36 @@ class _BreathingScreenState extends State<BreathingScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(_sessionProvider, (previous, next) {
+      if (next.isPreparing && next.prepSecondsRemaining != previous?.prepSecondsRemaining) {
+        HapticFeedback.selectionClick();
+      }
+      
+      if (next.isPreparing && !(previous?.isPreparing ?? false)) {
+        _springController.stop();
+        setState(() {
+          _dragOffset = Offset.zero;
+          _dragStretch = 0.0;
+          _dragAngle = 0.0;
+        });
+      }
+      if (next.isPlaying && !(previous?.isPlaying ?? false)) {
+        _springController.stop();
+        setState(() {
+          _dragOffset = Offset.zero;
+          _dragStretch = 0.0;
+          _dragAngle = 0.0;
+          _lastPhaseText = ""; // reset phase on play
+        });
+        _breathingController.repeat();
+      }
+      if (!next.isPlaying && (previous?.isPlaying ?? false)) {
+        _breathingController.stop();
+      }
+    });
+
+    final session = ref.watch(_sessionProvider);
+
     return Scaffold(
       backgroundColor: const Color(0xFF090B14),
       body: Container(
@@ -458,29 +461,29 @@ class _BreathingScreenState extends State<BreathingScreen>
                           : _dragOffset;
                   final isAtRest =
                       (_breathingController.value == 0.0 &&
-                          !_isPlaying &&
-                          !_isPreparing) ||
+                          !session.isPlaying &&
+                          !session.isPreparing) ||
                       _resetController.isAnimating;
-                  final isCompleted = _completedCycles >= _targetCycles;
-                  final phase = _isPreparing
+                  final isCompleted = session.completedCycles >= session.targetCycles;
+                  final phase = session.isPreparing
                       ? "Get Ready"
                       : (isCompleted
                           ? "Complete"
-                          : (_isPlaying
+                          : (session.isPlaying
                               ? _getPhaseText(breathProgress)
                               : (isAtRest ? "Ready" : "Paused")));
-                  final secondsRemaining = _isPreparing
-                      ? "${_prepSecondsRemaining}s"
-                      : (_isPlaying
+                  final secondsRemaining = session.isPreparing
+                      ? "${session.prepSecondsRemaining}s"
+                      : (session.isPlaying
                           ? "${_getPhaseSecondsRemaining(breathProgress)}s"
                           : (isAtRest
                               ? "${cycleDurationSeconds}s cycle"
                               : "${_getPhaseSecondsRemaining(breathProgress)}s"));
-                  final instruction = _isPreparing
+                  final instruction = session.isPreparing
                       ? "Settle in and relax your shoulders"
                       : (isCompleted
                           ? "Session completed! Tap to repeat"
-                          : (_isPlaying
+                          : (session.isPlaying
                               ? _getPhaseInstruction(breathProgress)
                               : (isAtRest ? "Tap play to begin" : "Tap to resume")));
 
@@ -502,7 +505,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                                   painter: BackgroundWavesPainter(
                                     animationValue: fluidPhase,
                                     breathProgress: breathProgress,
-                                    isPlaying: _isPlaying,
+                                    isPlaying: session.isPlaying,
                                     orbOffset: effectiveOffset,
                                   ),
                                 ),
@@ -514,22 +517,22 @@ class _BreathingScreenState extends State<BreathingScreen>
                                 child: Transform.scale(
                                   scale: currentScale,
                                   child: IgnorePointer(
-                                    ignoring: _isPlaying || _isPreparing,
+                                    ignoring: session.isPlaying || session.isPreparing,
                                     child: GestureDetector(
                                       behavior: HitTestBehavior.opaque,
-                                      onPanStart: _isPlaying || _isPreparing
+                                      onPanStart: session.isPlaying || session.isPreparing
                                           ? null
                                           : _onPanStart,
-                                      onPanUpdate: _isPlaying || _isPreparing
+                                      onPanUpdate: session.isPlaying || session.isPreparing
                                           ? null
                                           : _onPanUpdate,
-                                      onPanEnd: _isPlaying || _isPreparing
+                                      onPanEnd: session.isPlaying || session.isPreparing
                                           ? null
                                           : _onPanEnd,
-                                      onPanCancel: _isPlaying || _isPreparing
+                                      onPanCancel: session.isPlaying || session.isPreparing
                                           ? null
                                           : _onPanCancel,
-                                      onTap: _isPlaying || _isPreparing
+                                      onTap: session.isPlaying || session.isPreparing
                                           ? null
                                           : _onOrbTap,
                                       child: SizedBox(
@@ -539,7 +542,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                                           painter: IridescentBubblePainter(
                                             fluidPhase: fluidPhase,
                                             breathProgress: breathProgress,
-                                            isPlaying: _isPlaying,
+                                            isPlaying: session.isPlaying,
                                             dragStretch: _dragStretch,
                                             dragAngle: _dragAngle,
                                           ),
@@ -598,22 +601,52 @@ class _BreathingScreenState extends State<BreathingScreen>
                                   letterSpacing: 0.2,
                                 ),
                               ),
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.15),
-                                    width: 1,
+                              Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      setState(() {
+                                        _isMuted = !_isMuted;
+                                      });
+                                    },
+                                    child: Container(
+                                      width: 42,
+                                      height: 42,
+                                      margin: const EdgeInsets.only(right: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.08),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white.withValues(alpha: 0.15),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        _isMuted ? Icons.volume_off : Icons.volume_up,
+                                        color: Colors.white70,
+                                        size: 22,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                child: const Icon(
-                                  Icons.more_horiz,
-                                  color: Colors.white70,
-                                  size: 22,
-                                ),
+                                  Container(
+                                    width: 42,
+                                    height: 42,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.08),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.15),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.more_horiz,
+                                      color: Colors.white70,
+                                      size: 22,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -738,18 +771,12 @@ class _BreathingScreenState extends State<BreathingScreen>
                                 const SizedBox(width: 8),
                                 // Pill 2: Stable, non-jumping completed cycles badge
                                 GestureDetector(
-                                  onTap: _isPlaying || _isPreparing
+                                  onTap: session.isPlaying || session.isPreparing
                                       ? null
                                       : () {
                                           HapticFeedback.selectionClick();
                                           setState(() {
-                                            if (_targetCycles == 4) {
-                                              _targetCycles = 8;
-                                            } else if (_targetCycles == 8) {
-                                              _targetCycles = 12;
-                                            } else {
-                                              _targetCycles = 4;
-                                            }
+                                            ref.read(_sessionProvider.notifier).cycleTargetCycles();
                                           });
                                         },
                                   child: AnimatedSize(
@@ -789,7 +816,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                                           ),
                                           const SizedBox(width: 5),
                                           Text(
-                                            "Completed: $_completedCycles",
+                                            "Completed: ${session.completedCycles}",
                                             style: const TextStyle(
                                               color: Color(0xFFDDD6FE),
                                               fontSize: 13,
@@ -801,7 +828,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                                             ),
                                           ),
                                           Text(
-                                            " / $_targetCycles",
+                                            " / ${session.targetCycles}",
                                             style: TextStyle(
                                               color: const Color(
                                                 0xFFDDD6FE,
@@ -836,9 +863,9 @@ class _BreathingScreenState extends State<BreathingScreen>
                             // Glassmorphism Reset Button
                             BouncingResetButton(
                               enabled: _breathingController.value > 0.0 ||
-                                  _completedCycles > 0 ||
-                                  _isPlaying ||
-                                  _isPreparing ||
+                                  session.completedCycles > 0 ||
+                                  session.isPlaying ||
+                                  session.isPreparing ||
                                   _dragOffset != Offset.zero ||
                                   _resetController.isAnimating,
                               onTap: _resetExercise,
@@ -846,7 +873,7 @@ class _BreathingScreenState extends State<BreathingScreen>
                             const SizedBox(width: 24),
                             // Main Play/Pause Button
                             BouncingPlayButton(
-                              isPlaying: _isPlaying || _isPreparing,
+                              isPlaying: session.isPlaying || session.isPreparing,
                               onTap: _togglePlayPause,
                             ),
                             const SizedBox(width: 24),
@@ -869,632 +896,3 @@ class _BreathingScreenState extends State<BreathingScreen>
     );
   }
 }
-
-/// Custom painter for the delicate acoustic / breath frequency ribbons flowing behind the sphere.
-class BackgroundWavesPainter extends CustomPainter {
-  final double animationValue;
-  final double breathProgress;
-  final bool isPlaying;
-  final Offset orbOffset;
-
-  BackgroundWavesPainter({
-    required this.animationValue,
-    required this.breathProgress,
-    required this.isPlaying,
-    this.orbOffset = Offset.zero,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final centerY = size.height / 2 + orbOffset.dy * 0.25;
-    final centerX = size.width / 2 + orbOffset.dx * 0.25;
-    final orbRadius = 135.0;
-
-    final breathWaveModulation = isPlaying
-        ? 0.09 * sin(breathProgress * 2 * pi).abs()
-        : 0.02 * sin(animationValue * 2 * pi).abs();
-    final baseAlpha = 0.22 + breathWaveModulation;
-    const int numLines = 9;
-
-    // Paint left waves
-    for (int i = 0; i < numLines; i++) {
-      final path = Path();
-      final lineProgress = i / (numLines - 1);
-      final yOffset = (lineProgress - 0.5) * 55.0;
-      final phaseShift = i * 0.45 + animationValue * 2 * pi;
-
-      final wavePaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color =
-            Color.lerp(
-              const Color(0xFF06B6D4),
-              const Color(0xFFA855F7),
-              lineProgress,
-            )!.withValues(
-              alpha: baseAlpha * (1.0 - (lineProgress - 0.5).abs() * 0.8),
-            );
-
-      bool first = true;
-      final startX = 0.0;
-      final endX = centerX - (orbRadius * 0.45);
-
-      for (double x = startX; x <= endX; x += 4) {
-        final distFromCenter = (endX - x) / (endX - startX);
-        final envelope = sin(distFromCenter * pi);
-        final y =
-            centerY + yOffset + sin(x * 0.035 - phaseShift) * (14.0 * envelope);
-
-        if (first) {
-          path.moveTo(x, y);
-          first = false;
-        } else {
-          path.lineTo(x, y);
-        }
-      }
-      canvas.drawPath(path, wavePaint);
-    }
-
-    // Paint right waves
-    for (int i = 0; i < numLines; i++) {
-      final path = Path();
-      final lineProgress = i / (numLines - 1);
-      final yOffset = (lineProgress - 0.5) * 55.0;
-      final phaseShift = i * 0.45 + animationValue * 2 * pi;
-
-      final wavePaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..color =
-            Color.lerp(
-              const Color(0xFFA855F7),
-              const Color(0xFFFB7185),
-              lineProgress,
-            )!.withValues(
-              alpha: baseAlpha * (1.0 - (lineProgress - 0.5).abs() * 0.8),
-            );
-
-      bool first = true;
-      final startX = centerX + (orbRadius * 0.45);
-      final endX = size.width;
-
-      for (double x = startX; x <= endX; x += 4) {
-        final distFromCenter = (x - startX) / (endX - startX);
-        final envelope = sin(distFromCenter * pi);
-        final y =
-            centerY + yOffset + sin(x * 0.035 + phaseShift) * (14.0 * envelope);
-
-        if (first) {
-          path.moveTo(x, y);
-          first = false;
-        } else {
-          path.lineTo(x, y);
-        }
-      }
-      canvas.drawPath(path, wavePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant BackgroundWavesPainter oldDelegate) {
-    return oldDelegate.animationValue != animationValue ||
-        oldDelegate.breathProgress != breathProgress ||
-        oldDelegate.isPlaying != isPlaying ||
-        oldDelegate.orbOffset != orbOffset;
-  }
-}
-
-/// Custom painter for the organic, iridescent, translucent soap-bubble / glowing glass orb.
-class IridescentBubblePainter extends CustomPainter {
-  final double fluidPhase;
-  final double breathProgress;
-  final bool isPlaying;
-  final double dragStretch;
-  final double dragAngle;
-
-  IridescentBubblePainter({
-    required this.fluidPhase,
-    required this.breathProgress,
-    required this.isPlaying,
-    this.dragStretch = 0.0,
-    this.dragAngle = 0.0,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseRadius = size.width * 0.45;
-
-    // 1. Generate Organic Fluid Perimeter Path using harmonic perturbation & touch drag deformation
-    final outerPath = _generateOrganicPath(
-      center: center,
-      baseRadius: baseRadius,
-      phase: fluidPhase * 2 * pi,
-      perturbationScale: 1.0,
-      dragStretch: dragStretch,
-      dragAngle: dragAngle,
-    );
-
-    final bounds = Rect.fromCircle(center: center, radius: baseRadius + 20);
-
-    // -------------------------------------------------------------
-    // -------------------------------------------------------------
-    // PASS 1: Volumetric Ambient Aura (Matching the icon's triad aura)
-    // -------------------------------------------------------------
-    final auraPaint = Paint()
-      ..shader = SweepGradient(
-        center: Alignment.center,
-        colors: [
-          const Color(0xFF06B6D4).withValues(alpha: 0.22), // Cyan (left)
-          const Color(0xFFA855F7).withValues(alpha: 0.28), // Violet (top)
-          const Color(0xFFFB7185).withValues(alpha: 0.24), // Coral rose (right)
-          const Color(0xFFFDBA74).withValues(alpha: 0.16), // Warm peach (bottom)
-          const Color(0xFF06B6D4).withValues(alpha: 0.22),
-        ],
-        stops: const [0.0, 0.30, 0.62, 0.84, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: baseRadius * 1.35))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 28);
-    canvas.drawCircle(center, baseRadius * 1.25, auraPaint);
-
-    // -------------------------------------------------------------
-    // PASS 2: Translucent Midnight Glass Body (Clipped to organic shape)
-    // -------------------------------------------------------------
-    canvas.save();
-    canvas.clipPath(outerPath);
-
-    // Deep translucent glass interior with soft center darkness
-    final glassBodyPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.15, -0.15),
-        radius: 0.95,
-        colors: [
-          const Color(0xFF0D1226).withValues(alpha: 0.50),
-          const Color(0xFF070914).withValues(alpha: 0.72),
-          const Color(0xFF1E1B4B).withValues(alpha: 0.40),
-        ],
-        stops: const [0.0, 0.75, 1.0],
-      ).createShader(bounds);
-    canvas.drawPath(outerPath, glassBodyPaint);
-
-    // -------------------------------------------------------------
-    // PASS 3: The Three Chromatic Spheres (Matching the App Icon Triad)
-    // -------------------------------------------------------------
-    final circleRadius = baseRadius * 0.52;
-
-    // Subtle ambient orbital drift
-    final driftXTop = 4.0 * sin(fluidPhase * 2 * pi);
-    final driftYTop = 4.0 * cos(fluidPhase * 2 * pi);
-    final driftXLeft = 4.0 * cos(fluidPhase * 2 * pi + 2 * pi / 3);
-    final driftYLeft = 4.0 * sin(fluidPhase * 2 * pi + 2 * pi / 3);
-    final driftXRight = 4.0 * cos(fluidPhase * 2 * pi + 4 * pi / 3);
-    final driftYRight = 4.0 * sin(fluidPhase * 2 * pi + 4 * pi / 3);
-
-    // --- CIRCLE 1: TOP (Radiant Amethyst-Violet Sphere) ---
-    final topCenter = Offset(
-      center.dx + driftXTop,
-      center.dy - baseRadius * 0.28 + driftYTop,
-    );
-    final topBodyPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.10, -0.20),
-        radius: 0.85,
-        colors: [
-          const Color(0xFFE879F9).withValues(alpha: 0.44), // Luminous lilac core
-          const Color(0xFFA855F7).withValues(alpha: 0.36), // Electric violet
-          const Color(0xFF7C3AED).withValues(alpha: 0.18), // Deep purple
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.45, 0.80, 1.0],
-      ).createShader(Rect.fromCircle(center: topCenter, radius: circleRadius))
-      ..blendMode = BlendMode.plus;
-    canvas.drawCircle(topCenter, circleRadius, topBodyPaint);
-
-    final topRimGlow = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..color = const Color(0xFFC084FC).withValues(alpha: 0.70)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
-    canvas.drawCircle(topCenter, circleRadius * 0.98, topRimGlow);
-
-    final topCrispRim = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.3
-      ..shader = SweepGradient(
-        center: Alignment.center,
-        colors: [
-          Colors.white.withValues(alpha: 0.80),
-          const Color(0xFFF5D0FE).withValues(alpha: 0.65),
-          const Color(0xFFA855F7).withValues(alpha: 0.20),
-          Colors.white.withValues(alpha: 0.80),
-        ],
-      ).createShader(Rect.fromCircle(center: topCenter, radius: circleRadius));
-    canvas.drawCircle(topCenter, circleRadius, topCrispRim);
-
-    // --- CIRCLE 2: BOTTOM-LEFT (Electric Cyan-Blue Sphere) ---
-    final leftCenter = Offset(
-      center.dx - baseRadius * 0.26 + driftXLeft,
-      center.dy + baseRadius * 0.20 + driftYLeft,
-    );
-    final leftBodyPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.20, -0.15),
-        radius: 0.85,
-        colors: [
-          const Color(0xFF67E8F9).withValues(alpha: 0.46), // Brilliant aqua core
-          const Color(0xFF06B6D4).withValues(alpha: 0.36), // Electric cyan
-          const Color(0xFF0284C7).withValues(alpha: 0.18), // Deep sky-blue
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.45, 0.80, 1.0],
-      ).createShader(Rect.fromCircle(center: leftCenter, radius: circleRadius))
-      ..blendMode = BlendMode.plus;
-    canvas.drawCircle(leftCenter, circleRadius, leftBodyPaint);
-
-    final leftRimGlow = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..color = const Color(0xFF38BDF8).withValues(alpha: 0.75)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
-    canvas.drawCircle(leftCenter, circleRadius * 0.98, leftRimGlow);
-
-    final leftCrispRim = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.3
-      ..shader = SweepGradient(
-        center: Alignment.center,
-        colors: [
-          Colors.white.withValues(alpha: 0.80),
-          const Color(0xFFBAE6FD).withValues(alpha: 0.65),
-          const Color(0xFF0284C7).withValues(alpha: 0.20),
-          Colors.white.withValues(alpha: 0.80),
-        ],
-      ).createShader(Rect.fromCircle(center: leftCenter, radius: circleRadius));
-    canvas.drawCircle(leftCenter, circleRadius, leftCrispRim);
-
-    // --- CIRCLE 3: BOTTOM-RIGHT (Warm Peach-Rose / Sunset Coral Sphere) ---
-    final rightCenter = Offset(
-      center.dx + baseRadius * 0.26 + driftXRight,
-      center.dy + baseRadius * 0.20 + driftYRight,
-    );
-    final rightBodyPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.18, -0.15),
-        radius: 0.85,
-        colors: [
-          const Color(0xFFFDA4AF).withValues(alpha: 0.46), // Peach-rose core
-          const Color(0xFFFB7185).withValues(alpha: 0.36), // Coral rose
-          const Color(0xFFF43F5E).withValues(alpha: 0.18), // Sunset crimson
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.45, 0.80, 1.0],
-      ).createShader(Rect.fromCircle(center: rightCenter, radius: circleRadius))
-      ..blendMode = BlendMode.plus;
-    canvas.drawCircle(rightCenter, circleRadius, rightBodyPaint);
-
-    final rightRimGlow = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2
-      ..color = const Color(0xFFFDBA74).withValues(alpha: 0.75)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
-    canvas.drawCircle(rightCenter, circleRadius * 0.98, rightRimGlow);
-
-    final rightCrispRim = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.3
-      ..shader = SweepGradient(
-        center: Alignment.center,
-        colors: [
-          Colors.white.withValues(alpha: 0.80),
-          const Color(0xFFFED7AA).withValues(alpha: 0.65),
-          const Color(0xFFFB7185).withValues(alpha: 0.20),
-          Colors.white.withValues(alpha: 0.80),
-        ],
-      ).createShader(Rect.fromCircle(center: rightCenter, radius: circleRadius));
-    canvas.drawCircle(rightCenter, circleRadius, rightCrispRim);
-
-    canvas.restore(); // Restore clip
-
-    // -------------------------------------------------------------
-    // PASS 4: Radiant Fresnel Rim Lighting (Matching App Icon Edge)
-    // -------------------------------------------------------------
-    // A) Soft blurred rim glow matching the triad hues
-    final rimGlowPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 9.0
-      ..shader = SweepGradient(
-        center: Alignment.center,
-        colors: [
-          const Color(0xFF38BDF8).withValues(alpha: 0.70), // Cyan (left)
-          const Color(0xFFA855F7).withValues(alpha: 0.85), // Violet (top)
-          const Color(0xFFFB7185).withValues(alpha: 0.75), // Coral Rose (right)
-          const Color(0xFFFDBA74).withValues(alpha: 0.50), // Peach Gold (bottom)
-          const Color(0xFF38BDF8).withValues(alpha: 0.70),
-        ],
-        stops: const [0.0, 0.28, 0.60, 0.82, 1.0],
-      ).createShader(bounds)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0);
-    canvas.drawPath(outerPath, rimGlowPaint);
-
-    // B) Sharp, brilliant crisp rim line
-    final crispRimPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.4
-      ..shader = SweepGradient(
-        center: Alignment.center,
-        colors: [
-          const Color(0xFFBAE6FD), // Crisp ice cyan
-          const Color(0xFFE9D5FF), // Pale lilac
-          const Color(0xFFFBCFE8), // Pale rose
-          const Color(0xFFFFFFFF), // Brilliant white highlight
-          const Color(0xFF93C5FD), // Light blue
-          const Color(0xFFBAE6FD),
-        ],
-        stops: const [0.0, 0.3, 0.55, 0.75, 0.9, 1.0],
-      ).createShader(bounds);
-    canvas.drawPath(outerPath, crispRimPaint);
-  }
-
-  /// Generates a smooth, organic, fluid closed contour using harmonic sinusoidal radius perturbation,
-  /// touch/drag elongation, and Catmull-Rom spline to cubic Bezier interpolation.
-  Path _generateOrganicPath({
-    required Offset center,
-    required double baseRadius,
-    required double phase,
-    required double perturbationScale,
-    double dragStretch = 0.0,
-    double dragAngle = 0.0,
-  }) {
-    const int segments = 18;
-    final List<Offset> points = [];
-
-    for (int i = 0; i < segments; i++) {
-      final angle = (i * 2 * pi) / segments;
-
-      // Seamless harmonic fluid wobble formula (integer multipliers guarantee zero-pop seamless looping)
-      final d1 = 0.034 * sin(2 * angle + phase);
-      final d2 = 0.020 * cos(3 * angle - phase);
-      final d3 = 0.012 * sin(4 * angle + 2 * phase);
-
-      // Elastic elongation along drag angle and contraction along perpendicular
-      final angleDiff = angle - dragAngle;
-      final elongation = dragStretch * cos(2 * angleDiff);
-
-      final r =
-          baseRadius * (1.0 + (d1 + d2 + d3) * perturbationScale + elongation);
-
-      final x = center.dx + r * cos(angle);
-      final y = center.dy + r * sin(angle);
-      points.add(Offset(x, y));
-    }
-
-    final path = Path();
-    if (points.isEmpty) return path;
-
-    path.moveTo(points[0].dx, points[0].dy);
-
-    // Convert circular closed points to smooth cubic Beziers via Catmull-Rom
-    for (int i = 0; i < segments; i++) {
-      final p0 = points[(i - 1 + segments) % segments];
-      final p1 = points[i];
-      final p2 = points[(i + 1) % segments];
-      final p3 = points[(i + 2) % segments];
-
-      // Catmull-Rom to Cubic Bezier control points
-      final c1 = Offset(
-        p1.dx + (p2.dx - p0.dx) / 6.0,
-        p1.dy + (p2.dy - p0.dy) / 6.0,
-      );
-      final c2 = Offset(
-        p2.dx - (p3.dx - p1.dx) / 6.0,
-        p2.dy - (p3.dy - p1.dy) / 6.0,
-      );
-
-      path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, p2.dx, p2.dy);
-    }
-
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldRepaint(covariant IridescentBubblePainter oldDelegate) {
-    return oldDelegate.fluidPhase != fluidPhase ||
-        oldDelegate.breathProgress != breathProgress ||
-        oldDelegate.isPlaying != isPlaying ||
-        oldDelegate.dragStretch != dragStretch ||
-        oldDelegate.dragAngle != dragAngle;
-  }
-}
-
-/// Floating glassmorphism play/pause button with haptic feedback
-class BouncingPlayButton extends StatefulWidget {
-  final VoidCallback onTap;
-  final bool isPlaying;
-
-  const BouncingPlayButton({
-    super.key,
-    required this.onTap,
-    required this.isPlaying,
-  });
-
-  @override
-  State<BouncingPlayButton> createState() => _BouncingPlayButtonState();
-}
-
-class _BouncingPlayButtonState extends State<BouncingPlayButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 140),
-      reverseDuration: const Duration(milliseconds: 180),
-    );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.88,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) => _controller.reverse(),
-      onTapCancel: () => _controller.reverse(),
-      onTap: widget.onTap,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Container(
-          width: 76,
-          height: 76,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.06),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.22),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF8B5CF6).withValues(alpha: 0.35),
-                blurRadius: 28,
-                spreadRadius: 2,
-              ),
-              BoxShadow(
-                color: const Color(0xFF38BDF8).withValues(alpha: 0.2),
-                blurRadius: 20,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFA855F7), // Radiant Violet
-                    Color(0xFF06B6D4), // Electric Cyan
-                    Color(0xFFFB7185), // Warm Sunset Coral
-                  ],
-                ),
-              ),
-              child: Icon(
-                widget.isPlaying
-                    ? Icons.pause_rounded
-                    : Icons.play_arrow_rounded,
-                color: Colors.white,
-                size: 34,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Floating glassmorphism reset button with elastic feedback
-class BouncingResetButton extends StatefulWidget {
-  final VoidCallback onTap;
-  final bool enabled;
-
-  const BouncingResetButton({
-    super.key,
-    required this.onTap,
-    this.enabled = true,
-  });
-
-  @override
-  State<BouncingResetButton> createState() => _BouncingResetButtonState();
-}
-
-class _BouncingResetButtonState extends State<BouncingResetButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 140),
-      reverseDuration: const Duration(milliseconds: 180),
-    );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 0.88,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isEnabled = widget.enabled;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) => _controller.reverse(),
-      onTapCancel: () => _controller.reverse(),
-      onTap: isEnabled ? widget.onTap : null,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 200),
-          opacity: isEnabled ? 1.0 : 0.35,
-          child: Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: isEnabled ? 0.08 : 0.03),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: isEnabled ? 0.20 : 0.08),
-                width: 1.2,
-              ),
-              boxShadow: isEnabled
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.25),
-                        blurRadius: 18,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.refresh_rounded,
-                color: Colors.white,
-                size: 26,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-

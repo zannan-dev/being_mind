@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:being_mind/screens/breathing_screen.dart';
+import 'package:being_mind/widgets/bouncing_play_button.dart';
+import 'package:being_mind/widgets/bouncing_reset_button.dart';
+import 'package:being_mind/painters/iridescent_bubble_painter.dart';
 
 void main() {
   testWidgets('BreathingScreen renders iridescent bubble timer and controls',
